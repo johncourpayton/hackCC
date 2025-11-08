@@ -106,8 +106,18 @@ export default function Home() {
   }
 
   const saveUserInformation = () => {
-    console.log("api key " + canvasApiKey);
-    console.log("url " + canvasUrl);
+
+    let trimmedUrl = canvasUrl.trim();
+
+    trimmedUrl = trimmedUrl.replace(/^https?:\/\//, "");
+
+    const match = trimmedUrl.match(/^([^\/]+\.com)/);
+    trimmedUrl = match ? match[1] : trimmedUrl;
+
+    if (!canvasApiKey.trim() || !trimmedUrl) return;
+
+    console.log("api key " + canvasApiKey.trim());
+    console.log("url " + trimmedUrl);
     
   }
     
@@ -242,7 +252,7 @@ export default function Home() {
                   School Canvas URL
                 </label>
                 <input
-                  type="text"
+                  type="url"
                   value={canvasUrl}
                   onChange={(e) => setCanvasUrl(e.target.value)}
                   placeholder="e.g., https://yourschool.instructure.com"
@@ -254,6 +264,7 @@ export default function Home() {
               <button
                 onClick={saveUserInformation}
                 className="w-full px-4 py-2 rounded border-2 border-gray-800 hover:bg-gray-100 font-medium text-black"
+                disabled ={!canvasApiKey.trim() || !canvasUrl.trim()}
               >
                 Save
               </button>
