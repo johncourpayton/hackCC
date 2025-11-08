@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation"
 import AssignmentCard from "./components/AssignmentCard";
 
 interface Assignment {
-  name: string
-  due_date: string
-  description?: string
-  priority?: 'low' | 'medium' | 'high'
-  showNotification?: boolean
+  id: number;
+  name: string; // Changed from title to name
+  due_date: string; // Changed from dueDate to due_date
+  description?: string;
+  priority?: 'low' | 'medium' | 'high';
+  showNotification?: boolean;
 }
 
 export default function Home() {
@@ -26,63 +27,44 @@ export default function Home() {
   }
 
   const handlePullInfo = async () => {
-      const fetchAssignmentInformation = async () => {
-        setAssignmentData([
-          {
-            "name": "Assignment 1",
-            "due_date": "2025-11-18",
-            "description": "",
-            "showNotification": false
-          },
-          {
-            "name": "Assignment 2",
-            "due_date": "2025-11-20",
-            "description": "",
-            "showNotification": false
-          },
-          {
-            "name": "Assignment 3",
-            "due_date": "2025-12-01",
-            "description": "",
-            "showNotification": false
-          },
-          {
-            "name": "Assignment 4",
-            "due_date": "2025-12-05",
-            "description": "",
-            "showNotification": false
-          },
-          {
-            "name": "Assignment 5",
-            "due_date": "2025-12-10",
-            "description": "",
-            "showNotification": false
-          }
-        ]);
-      };
-
-      await fetchAssignmentInformation();
+    try {
+      const response = await fetch('/api/canvas'); // Call the new Next.js API route
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data: Assignment[] = await response.json();
+      setAssignmentData(data.map((assignment, index) => ({
+        id: index + 1, // Assign a unique ID for frontend use
+        name: assignment.name,
+        due_date: assignment.due_date,
+        description: "", // Initialize description
+        priority: undefined, // Initialize priority
+        showNotification: false // Initialize showNotification
+      })));
+    } catch (error) {
+      console.error("Failed to fetch assignments:", error);
+    }
   };
 
   const handlePriorityChange = (index: number, priority: 'low' | 'medium' | 'high') => {
-    setAssignmentData(prev => 
-      prev.map((assignment, i) => 
+    setAssignmentData((prev: Assignment[]) => 
+      prev.map((assignment: Assignment, i: number) => 
         i === index ? { ...assignment, priority } : assignment
       )
     );
   };
 
   const handleDescriptionChange = (index: number, description: string) => {
-    setAssignmentData(prev => 
-      prev.map((assignment, i) => 
+    setAssignmentData((prev: Assignment[]) => 
+      prev.map((assignment: Assignment, i: number) => 
         i === index ? { ...assignment, description } : assignment
       )
     );
   };
 
   const handleNotificationToggle = (index: number) => {
-    setAssignmentData(prev => 
-      prev.map((assignment, i) => 
+    setAssignmentData((prev: Assignment[]) => 
+      prev.map((assignment: Assignment, i: number) => 
         i === index ? { ...assignment, showNotification: !assignment.showNotification } : assignment
       )
     );
@@ -90,12 +72,13 @@ export default function Home() {
 
   const handleAddAssignment = () => {
     const newAssignment: Assignment = {
-      name: `Assignment ${assignmentData.length + 1}`,
-      due_date: new Date().toISOString().split('T')[0],
+      id: assignmentData.length > 0 ? Math.max(...assignmentData.map(a => a.id)) + 1 : 1,
+      name: `New Assignment ${assignmentData.length + 1}`, // Changed from title to name
+      due_date: new Date().toISOString().split('T')[0], // Changed from dueDate to due_date
       description: "",
       showNotification: false
     };
-    setAssignmentData(prev => [...prev, newAssignment]);
+    setAssignmentData((prev: Assignment[]) => [...prev, newAssignment]);
   };
     
   return (
@@ -133,14 +116,14 @@ export default function Home() {
         ) : (
           assignmentData.map((assignment, i) => (
             <AssignmentCard
-              key={i}
+              key={assignment.id}
               name={assignment.name}
               due_date={assignment.due_date}
               description={assignment.description}
               priority={assignment.priority}
               showNotification={assignment.showNotification}
-              onPriorityChange={(priority) => handlePriorityChange(i, priority)}
-              onDescriptionChange={(description) => handleDescriptionChange(i, description)}
+              onPriorityChange={(priority: 'low' | 'medium' | 'high') => handlePriorityChange(i, priority)}
+              onDescriptionChange={(description: string) => handleDescriptionChange(i, description)}
               onNotificationToggle={() => handleNotificationToggle(i)}
             />
           ))
