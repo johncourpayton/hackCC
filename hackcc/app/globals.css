@@ -24,3 +24,10 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.header-button-row {
+  display: 'flex';
+  justify-content: center;
+  
+
+}
