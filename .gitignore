@@ -1,0 +1,36 @@
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node modules (if any at root)
+node_modules/
+

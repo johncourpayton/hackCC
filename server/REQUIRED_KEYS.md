@@ -54,13 +54,13 @@ python discord_reminder.py <discord_user_id>
 
 ```env
 # Canvas API (Required)
-CANVAS_API_KEY=2352~your_canvas_token_here
+CANVAS_API_KEY=your_canvas_token_here
 
 # Discord Bot Token (Required)
 DISCORD_BOT_TOKEN=your_bot_token_here
 
 # Discord User ID (Optional - for scheduler)
-DISCORD_USER_ID=987654321098765432
+DISCORD_USER_ID=your_discord_user_id_here
 ```
 
 ## Setup Guides

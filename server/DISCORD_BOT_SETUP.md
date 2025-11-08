@@ -141,10 +141,10 @@ Discord has rate limits on creating DM channels. If you're sending many reminder
 ```env
 # Discord Bot (for DMs)
 DISCORD_BOT_TOKEN=your_bot_token_here
-DISCORD_USER_ID=987654321098765432
+DISCORD_USER_ID=your_discord_user_id_here
 
 # Discord Webhook (for channel messages - optional)
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN
 
 # Canvas API
 CANVAS_API_KEY=your_canvas_api_key_here
