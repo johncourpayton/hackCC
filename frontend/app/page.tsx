@@ -16,7 +16,10 @@ interface Assignment {
 export default function Home() {
   const router = useRouter();
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showUserInfo, setShowUserInfo] = useState(false);
   const [assignmentData, setAssignmentData] = useState<Assignment[]>([]);
+  const [canvasApiKey, setCanvasApiKey] = useState('');
+  const [canvasUrl, setCanvasUrl] = useState('');
 
   const handleHowToButton = () => {
     setShowInstructions(!showInstructions);
@@ -80,6 +83,26 @@ export default function Home() {
     };
     setAssignmentData((prev: Assignment[]) => [...prev, newAssignment]);
   };
+
+  const handleUserInfoPopup = () => {
+    setShowUserInfo(!showUserInfo);
+  }
+
+  const saveUserInformation = () => {
+
+    let trimmedUrl = canvasUrl.trim();
+
+    trimmedUrl = trimmedUrl.replace(/^https?:\/\//, "");
+
+    const match = trimmedUrl.match(/^([^\/]+\.com)/);
+    trimmedUrl = match ? match[1] : trimmedUrl;
+
+    if (!canvasApiKey.trim() || !trimmedUrl) return;
+
+    console.log("api key " + canvasApiKey.trim());
+    console.log("url " + trimmedUrl);
+    
+  }
     
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -92,7 +115,10 @@ export default function Home() {
           How To Use
         </button>
         <div className="text-2xl font-bold text-black">Canvas Companion</div>
-        <button className="px-6 py-2 rounded border-2 border-gray-800 hover:bg-gray-100 font-medium text-black">
+        <button 
+          onClick = {handleUserInfoPopup}
+          className="px-6 py-2 rounded border-2 border-gray-800 hover:bg-gray-100 font-medium text-black"
+        >
           My Info
         </button>
       </div>
@@ -175,6 +201,59 @@ export default function Home() {
             </div>
           </div>
         </div>
+      )}
+
+      {showUserInfo && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full m-4 border-2 border-gray-800">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-black">Input User Information</h2>
+              <button 
+                onClick={handleUserInfoPopup}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="text-black">
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  Canvas API Key
+                </label>
+                <input
+                  type="text"
+                  value={canvasApiKey}
+                  onChange={(e) => setCanvasApiKey(e.target.value)}
+                  placeholder="Enter your Canvas API key"
+                  required
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded text-black focus:outline-none focus:border-blue-400"
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  School Canvas URL
+                </label>
+                <input
+                  type="url"
+                  value={canvasUrl}
+                  onChange={(e) => setCanvasUrl(e.target.value)}
+                  placeholder="e.g., https://yourschool.instructure.com"
+                  required
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded text-black focus:outline-none focus:border-blue-400"
+                />
+              </div>
+
+              <button
+                onClick={saveUserInformation}
+                className="w-full px-4 py-2 rounded border-2 border-gray-800 hover:bg-gray-100 font-medium text-black"
+                disabled ={!canvasApiKey.trim() || !canvasUrl.trim()}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>          
       )}
     </div>
   );
