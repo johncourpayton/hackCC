@@ -20,6 +20,7 @@ export default function Home() {
   const [assignmentData, setAssignmentData] = useState<Assignment[]>([]);
   const [canvasApiKey, setCanvasApiKey] = useState('');
   const [canvasUrl, setCanvasUrl] = useState('');
+  const [discordIdNumber, setDiscordIdNumber] = useState('');
 
   const handleHowToButton = () => {
     setShowInstructions(!showInstructions);
@@ -88,21 +89,40 @@ export default function Home() {
     setShowUserInfo(!showUserInfo);
   }
 
-  const saveUserInformation = () => {
-
+  const saveUserInformation = async () => {
     let trimmedUrl = canvasUrl.trim();
-
     trimmedUrl = trimmedUrl.replace(/^https?:\/\//, "");
-
     const match = trimmedUrl.match(/^([^\/]+\.com)/);
     trimmedUrl = match ? match[1] : trimmedUrl;
 
     if (!canvasApiKey.trim() || !trimmedUrl) return;
 
-    console.log("api key " + canvasApiKey.trim());
-    console.log("url " + trimmedUrl);
-    
-  }
+    console.log("url: " + trimmedUrl)
+    console.log("apiKey: " + canvasApiKey)
+
+    try {
+      const response = await fetch('http://localhost:5000/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          apiKey: canvasApiKey.trim(),
+          canvasDomain: trimmedUrl,
+          // discordId: discordIdNumber
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save settings');
+      }
+
+      // Close the modal after successful save
+      handleUserInfoPopup();
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
+  };
     
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -216,6 +236,21 @@ export default function Home() {
               </button>
             </div>
             <div className="text-black">
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  Discord Id Number
+                </label>
+                <input
+                  type="text"
+                  value={discordIdNumber}
+                  onChange={(e) => setDiscordIdNumber(e.target.value)}
+                  placeholder="Enter your Discord ID #"
+                  required
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded text-black focus:outline-none focus:border-blue-400"
+                />
+              </div>
+
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-2">
                   Canvas API Key

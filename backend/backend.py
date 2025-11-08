@@ -1,7 +1,6 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 import requests
-import json
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -10,7 +9,7 @@ CORS(app) # Enable CORS for all routes
 
 # --- PLEASE EDIT THESE VALUES ---
 CANVAS_DOMAIN = "coastdistrict.instructure.com"  # Replace with your school's Canvas domain
-API_TOKEN = "9f8f2b2d1bb17bd8de732ff721ecbbed0ffebd81"  # Replace with the Access Token you generated
+API_TOKEN = "2352~hNJYEBRcZk3TkEeGxFwz4vLymAxe23fHQBRxCvaXTKtJecZQPXfHCCEzhMnZVk7L"  # Replace with the Access Token you generated
 START_DATE = "2025-11-08"  # Set your desired start date (YYYY-MM-DD)
 END_DATE = "2025-11-15"    # Set your desired end date (YYYY-MM-DD)
 
@@ -21,18 +20,13 @@ COURSE_ID = None
 # ----------------------------------
 
 
-def get_user_courses():
+def get_user_courses(canvas_domain: str, api_token: str):
     """
-    Fetches all courses the user is enrolled in.
+    Fetch all active courses for the user from Canvas.
     """
-    api_url = f"https://{CANVAS_DOMAIN}/api/v1/courses"
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
-    params = {
-        "enrollment_state": "active", # Only get active courses
-        "per_page": 100
-    }
+    api_url = f"https://{canvas_domain}/api/v1/courses"
+    headers = {"Authorization": f"Bearer {api_token}"}
+    params = {"enrollment_state": "active", "per_page": 100}
 
     try:
         response = requests.get(api_url, headers=headers, params=params)
@@ -40,35 +34,31 @@ def get_user_courses():
         courses = response.json()
         print(f"Found {len(courses)} active courses.")
         return courses
-    except requests.exceptions.HTTPError as http_err:
-        print(f"HTTP error occurred while fetching courses: {http_err}")
-        print("Please check your API Token and Canvas Domain.")
     except requests.exceptions.RequestException as err:
-        print(f"An error occurred while fetching courses: {err}")
-    except json.JSONDecodeError:
-        print("Failed to decode course response from Canvas. The API may be down.")
+        print(f"Error fetching courses: {err}")
     return []
 
 
 def fetch_canvas_assignments():
     """
-    Fetches Canvas assignments from all user's courses within a specified date range.
+    Fetch assignments from Canvas using the saved user settings.
     """
-    all_assignments = []
-    headers = {
-        "Authorization": f"Bearer {API_TOKEN}"
-    }
+    if not USER_SETTINGS:
+        print("User settings not set! Cannot fetch assignments.")
+        return []
+
+    canvas_domain = USER_SETTINGS.get("canvas_domain")
+    api_token = USER_SETTINGS.get("api_token")
+    if not canvas_domain or not api_token:
+        print("Canvas domain or API token missing!")
+        return []
 
     start_dt = datetime.fromisoformat(START_DATE)
     end_dt = datetime.fromisoformat(END_DATE)
+    courses = get_user_courses(canvas_domain, api_token)
 
-    courses = get_user_courses()
-
-    if not courses:
-        print("No courses found or unable to fetch courses. Cannot retrieve assignments.")
-        return []
-
-    print(f"Fetching assignments from {START_DATE} to {END_DATE} for all courses...")
+    all_assignments = []
+    headers = {"Authorization": f"Bearer {api_token}"}
 
     for course in courses:
         course_id = course.get("id")
@@ -76,74 +66,75 @@ def fetch_canvas_assignments():
         if not course_id:
             continue
 
-        # Construct the API URL for course assignments
-        api_url = f"https://{CANVAS_DOMAIN}/api/v1/courses/{course_id}/assignments"
-        params = {
-            "per_page": 100,
-            "bucket": "upcoming" # Fetch upcoming assignments, then filter by date
-        }
+        api_url = f"https://{canvas_domain}/api/v1/courses/{course_id}/assignments"
+        params = {"per_page": 100, "bucket": "upcoming"}
 
         try:
             response = requests.get(api_url, headers=headers, params=params)
             response.raise_for_status()
-            course_assignments = response.json()
+            assignments = response.json()
 
-            for assignment in course_assignments:
-                due_at_str = assignment.get("due_at")
-                if due_at_str:
+            for assignment in assignments:
+                due_at = assignment.get("due_at")
+                if due_at:
                     try:
-                        due_dt = datetime.fromisoformat(due_at_str.rstrip("Z"))
+                        due_dt = datetime.fromisoformat(due_at.rstrip("Z"))
                         if start_dt <= due_dt <= end_dt:
-                            assignment["course_name"] = course_name # Add course name for display
+                            assignment["course_name"] = course_name
                             all_assignments.append(assignment)
                     except ValueError:
-                        pass # Ignore assignments with unparseable due dates
-
-        except requests.exceptions.HTTPError as http_err:
-            print(f"HTTP error occurred for course {course_name} ({course_id}): {http_err}")
+                        continue
         except requests.exceptions.RequestException as err:
-            print(f"An error occurred for course {course_name} ({course_id}): {err}")
-        except json.JSONDecodeError:
-            print(f"Failed to decode assignment response for course {course_name} ({course_id}).")
+            print(f"Error fetching assignments for {course_name}: {err}")
 
-    if not all_assignments:
-        print("No assignments found in this date range across all your courses.")
-        return []
-
+    # Format assignments for frontend
     formatted_assignments = []
-    for assignment in all_assignments:
-        title = assignment.get("name", "No Title")
-        
-        due_date_str = assignment.get("due_at", "No Due Date")
+    for a in all_assignments:
+        due_date_str = a.get("due_at")
         formatted_due_date = "No Due Date"
-        if due_date_str and due_date_str != "No Due Date":
+        if due_date_str:
             try:
-                # Parse the ISO 8601 date string. It should be timezone-aware (UTC).
                 due_date_utc = datetime.fromisoformat(due_date_str.rstrip("Z")).replace(tzinfo=timezone.utc)
-                
-                # Define the local timezone (America/Los_Angeles is UTC-8)
                 local_timezone = ZoneInfo("America/Los_Angeles")
-
-                # Convert UTC due date to local timezone
                 due_date_local = due_date_utc.astimezone(local_timezone)
-                
                 formatted_due_date = due_date_local.strftime("%A, %B %d at %I:%M %p")
-            except ValueError:
-                pass # Keep the original string if parsing fails
             except Exception as e:
-                print(f"Error converting timezone for {title}: {e}")
-        
+                print(f"Error formatting date for {a.get('name')}: {e}")
+
         formatted_assignments.append({
-            "name": title,
+            "name": a.get("name", "No Title"),
             "due_date": formatted_due_date
         })
-    
+
     return formatted_assignments
+
+
+@app.route("/api/settings", methods=["POST"])
+def set_user_settings():
+    """
+    Save user settings (Canvas API key, domain, Discord ID).
+    """
+    global USER_SETTINGS
+    user_info = request.json
+
+    USER_SETTINGS = {
+        "canvas_domain": user_info.get("canvasDomain"),
+        "api_token": user_info.get("apiKey"),
+        "discord_id": user_info.get("discordId")
+    }
+
+    print("Saved user settings:", USER_SETTINGS)
+    return jsonify({"status": "success"})
+
 
 @app.route("/api/assignments", methods=["GET"])
 def get_assignments():
+    """
+    Return assignments for the current user settings.
+    """
     assignments = fetch_canvas_assignments()
     return jsonify(assignments)
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
