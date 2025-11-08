@@ -1,9 +1,7 @@
 import requests
 import json
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo # For Python 3.9+
-# For Python versions < 3.9, you would typically use 'pytz' library:
-# import pytz
+from zoneinfo import ZoneInfo 
 
 # --- PLEASE EDIT THESE VALUES ---
 CANVAS_DOMAIN = "coastdistrict.instructure.com"  # Replace with your school's Canvas domain
