@@ -10,7 +10,7 @@ CORS(app) # Enable CORS for all routes
 
 # --- PLEASE EDIT THESE VALUES ---
 CANVAS_DOMAIN = "coastdistrict.instructure.com"  # Replace with your school's Canvas domain
-API_TOKEN = "2352~hNJYEBRcZk3TkEeGxFwz4vLymAxe23fHQBRxCvaXTKtJecZQPXfHCCEzhMnZVk7L"  # Replace with the Access Token you generated
+API_TOKEN = "your_canvas_api_token_here"  # Replace with the Access Token you generated
 START_DATE = "2025-11-08"  # Set your desired start date (YYYY-MM-DD)
 END_DATE = "2025-11-15"    # Set your desired end date (YYYY-MM-DD)
 
