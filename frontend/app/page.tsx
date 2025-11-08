@@ -21,6 +21,7 @@ export default function Home() {
   const [canvasApiKey, setCanvasApiKey] = useState('');
   const [canvasUrl, setCanvasUrl] = useState('');
   const [discordIdNumber, setDiscordIdNumber] = useState('');
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
   const handleHowToButton = () => {
     setShowInstructions(!showInstructions);
@@ -117,8 +118,12 @@ export default function Home() {
         throw new Error('Failed to save settings');
       }
 
-      // Close the modal after successful save
+      // Close the modal after successful save and show confirmation
       handleUserInfoPopup();
+      setShowSaveConfirmation(true);
+      setTimeout(() => {
+        setShowSaveConfirmation(false);
+      }, 3000); // Hide after 3 seconds
     } catch (error) {
       console.error('Error saving settings:', error);
     }
@@ -289,6 +294,13 @@ export default function Home() {
             </div>
           </div>
         </div>          
+      )}
+
+      {/* Save Confirmation Notification */}
+      {showSaveConfirmation && (
+        <div className="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+          User information saved successfully!
+        </div>
       )}
     </div>
   );
