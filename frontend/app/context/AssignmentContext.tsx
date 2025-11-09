@@ -18,12 +18,15 @@ interface AssignmentContextType {
   handleDescriptionChange: (index: number, description: string) => void;
   handleNotificationToggle: (index: number) => void;
   handleAddAssignment: () => void;
+  studyPlan: string | null;
+  setStudyPlan: (plan: string | null) => void;
 }
 
 const AssignmentContext = createContext<AssignmentContextType | undefined>(undefined);
 
 export const AssignmentProvider = ({ children }: { children: ReactNode }) => {
   const [assignmentData, setAssignmentDataState] = useState<Assignment[]>([]);
+  const [studyPlan, setStudyPlanState] = useState<string | null>(null);
 
   const setAssignmentData = (data: Assignment[]) => {
     setAssignmentDataState(data.map((assignment, index) => ({
@@ -71,6 +74,10 @@ export const AssignmentProvider = ({ children }: { children: ReactNode }) => {
     setAssignmentDataState((prev) => [...prev, newAssignment]);
   };
 
+  const setStudyPlan = (plan: string | null) => {
+    setStudyPlanState(plan);
+  };
+
   return (
     <AssignmentContext.Provider value={{ 
         assignmentData, 
@@ -78,7 +85,9 @@ export const AssignmentProvider = ({ children }: { children: ReactNode }) => {
         handlePriorityChange,
         handleDescriptionChange,
         handleNotificationToggle,
-        handleAddAssignment
+        handleAddAssignment,
+        studyPlan,
+        setStudyPlan
     }}>
       {children}
     </AssignmentContext.Provider>

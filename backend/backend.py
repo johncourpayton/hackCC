@@ -17,6 +17,7 @@ from discord_reminder import AssignmentReminderBot
 from reminder_service import check_and_send_reminders, create_test_assignment
 from reminder_tracker import ReminderTracker
 from canvas import get_assignments_next_week
+from gemini import generate_text_with_gemini
 
 # Load environment variables
 load_dotenv()
@@ -247,6 +248,58 @@ def get_assignments():
             print(f"[API] Warning: Reminder check failed: {e}")
     
     return jsonify(assignments)
+
+
+@app.route("/generate-study-plan", methods=["POST"])
+def generate_study_plan():
+    """
+    Generate a study plan using Gemini API based on assignment data.
+    """
+    try:
+        data = request.json
+        assignments = data.get("assignments", [])
+        
+        if not assignments:
+            return jsonify({
+                "status": "error",
+                "message": "No assignments provided"
+            }), 400
+        
+        # Format assignments for the prompt
+        assignments_text = "\n".join([
+            f"- {a.get('name', 'Unnamed Assignment')} (Due: {a.get('due_date', 'No due date')}, Priority: {a.get('priority', 'none')}, Description: {a.get('description', 'No description')})"
+            for a in assignments
+        ])
+        
+        # Create a prompt for Gemini
+        prompt = f"""Based on the following assignments, create a detailed and personalized study plan. 
+The study plan should include:
+1. A recommended schedule for completing each assignment
+2. Suggested time allocation based on priority levels
+3. Tips for managing the workload
+4. A day-by-day breakdown if applicable
+
+Assignments:
+{assignments_text}
+
+Please provide a well-formatted, actionable study plan that helps the student effectively manage their time and complete all assignments on time."""
+        
+        # Generate study plan using Gemini
+        study_plan = generate_text_with_gemini(prompt)
+        
+        return jsonify({
+            "status": "success",
+            "study_plan": study_plan
+        })
+        
+    except Exception as e:
+        print(f"Error generating study plan: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 
 # ============================================================================

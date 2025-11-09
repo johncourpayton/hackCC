@@ -22,7 +22,8 @@ export default function Home() {
     handlePriorityChange, 
     handleDescriptionChange, 
     handleNotificationToggle, 
-    handleAddAssignment 
+    handleAddAssignment,
+    setStudyPlan
   } = useAssignments();
   const [showInstructions, setShowInstructions] = useState(false);
   const [showUserInfo, setShowUserInfo] = useState(false);
@@ -61,6 +62,13 @@ export default function Home() {
 
       const result = await response.json();
       console.log('Gemini Response:', result);
+
+      // Store the study plan in context
+      if (result.status === 'success' && result.study_plan) {
+        setStudyPlan(result.study_plan);
+      } else {
+        throw new Error(result.message || 'Failed to generate study plan');
+      }
 
       // Navigate to study plan page
       router.push('/study-plan');
