@@ -73,6 +73,7 @@ class DiscordBot:
                 "recipient_id": str(user_id)
             }
             
+            print(f"[DiscordBot] Attempting to create DM channel with user {user_id}")
             response = requests.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             
@@ -82,26 +83,38 @@ class DiscordBot:
             if channel_id:
                 # Cache the channel ID
                 self.dm_channels[user_id] = channel_id
-                print(f"Created DM channel {channel_id} with user {user_id}")
+                print(f"[DiscordBot] ✅ Created DM channel {channel_id} with user {user_id}")
             
             return channel_id
             
         except requests.exceptions.HTTPError as e:
             error_msg = "Unknown error"
+            error_code = None
             if hasattr(e, 'response') and e.response is not None:
+                error_code = e.response.status_code
                 try:
                     error_data = e.response.json()
                     error_msg = error_data.get('message', str(e))
-                    print(f"Discord API Error: {error_msg}")
-                    print(f"Response: {e.response.text}")
+                    print(f"[DiscordBot] ❌ Discord API Error ({error_code}): {error_msg}")
+                    print(f"[DiscordBot] Full response: {e.response.text}")
+                    
+                    # Provide helpful error messages
+                    if error_code == 400:
+                        print(f"[DiscordBot] 💡 Tip: Check if the user ID '{user_id}' is correct")
+                    elif error_code == 403:
+                        print(f"[DiscordBot] 💡 Tip: Bot may not have permission to DM this user. Ensure:")
+                        print(f"   - Bot is in at least one server with the user")
+                        print(f"   - User has 'Allow direct messages from server members' enabled")
+                    elif error_code == 401:
+                        print(f"[DiscordBot] 💡 Tip: Bot token may be invalid. Check DISCORD_BOT_TOKEN in .env")
                 except:
                     error_msg = e.response.text
-                    print(f"HTTP Error {e.response.status_code}: {error_msg}")
+                    print(f"[DiscordBot] ❌ HTTP Error {error_code}: {error_msg}")
             else:
-                print(f"HTTP Error: {e}")
+                print(f"[DiscordBot] ❌ HTTP Error: {e}")
             return None
         except requests.exceptions.RequestException as e:
-            print(f"Error creating DM channel: {e}")
+            print(f"[DiscordBot] ❌ Error creating DM channel: {e}")
             return None
     
     def send_dm(self, user_id: str, content: str = None, embed: Optional[Dict] = None) -> bool:

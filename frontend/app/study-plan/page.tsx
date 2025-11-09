@@ -3,48 +3,59 @@
 import { useRouter } from 'next/navigation'
 import { useAssignments } from '../context/AssignmentContext'
 
+interface ScheduleDay {
+  day: string;
+  date: string;
+  assignments: Array<{
+    name: string;
+    time: string;
+    duration: string;
+    priority: string;
+  }>;
+}
+
+interface StudyPlanData {
+  schedule: ScheduleDay[];
+  error?: string;
+  raw_response?: string;
+}
+
 export default function StudyPlan() {
   const router = useRouter();
   const { assignmentData, studyPlan } = useAssignments();
 
-  // Format the study plan text to preserve line breaks and formatting
-  const formatStudyPlan = (text: string | null) => {
-    if (!text) return null;
+  // Parse study plan - could be JSON object or string
+  const parseStudyPlan = (plan: string | null): StudyPlanData | null => {
+    if (!plan) return null;
     
-    // Split by double newlines to create paragraphs
-    const paragraphs = text.split(/\n\n+/);
-    
-    return paragraphs.map((paragraph, index) => {
-      // Check if paragraph starts with a number or bullet point
-      const isList = /^[\d\-\*\•]/.test(paragraph.trim());
-      const isHeading = /^#+\s/.test(paragraph.trim()) || /^[A-Z][^.!?]*:/.test(paragraph.trim());
-      
-      if (isHeading) {
-        return (
-          <h2 key={index} className="text-xl font-bold mt-6 mb-3 text-black">
-            {paragraph.trim().replace(/^#+\s/, '')}
-          </h2>
-        );
-      } else if (isList) {
-        // Split list items
-        const items = paragraph.split(/\n(?=[\d\-\*\•])/);
-        return (
-          <ul key={index} className="list-disc list-inside mb-4 space-y-2 text-black">
-            {items.map((item, itemIndex) => (
-              <li key={itemIndex} className="ml-4">
-                {item.trim().replace(/^[\d\-\*\•]\s*/, '')}
-              </li>
-            ))}
-          </ul>
-        );
-      } else {
-        return (
-          <p key={index} className="mb-4 text-black leading-relaxed whitespace-pre-line">
-            {paragraph.trim()}
-          </p>
-        );
+    try {
+      // Try parsing as JSON first
+      const parsed = typeof plan === 'string' ? JSON.parse(plan) : plan;
+      if (parsed && parsed.schedule && Array.isArray(parsed.schedule)) {
+        return parsed;
       }
-    });
+    } catch (e) {
+      // If parsing fails, return null (fallback to old format)
+      console.warn('Failed to parse study plan as JSON:', e);
+    }
+    
+    return null;
+  };
+
+  const studyPlanData = parseStudyPlan(studyPlan);
+
+  // Get priority color
+  const getPriorityColor = (priority: string) => {
+    switch (priority?.toLowerCase()) {
+      case 'high':
+        return 'bg-red-100 border-red-300 text-red-800';
+      case 'medium':
+        return 'bg-yellow-100 border-yellow-300 text-yellow-800';
+      case 'low':
+        return 'bg-green-100 border-green-300 text-green-800';
+      default:
+        return 'bg-gray-100 border-gray-300 text-gray-800';
+    }
   };
 
   return (
@@ -61,10 +72,56 @@ export default function StudyPlan() {
           <div className="w-20"></div> {/* Spacer for centering */}
         </div>
 
-        {studyPlan ? (
+        {studyPlanData && studyPlanData.schedule && studyPlanData.schedule.length > 0 ? (
+          <div className="bg-white rounded-lg border-2 border-gray-800 p-8 shadow-lg">
+            <h2 className="text-2xl font-bold mb-6 text-black">Study Schedule</h2>
+            <div className="space-y-6">
+              {studyPlanData.schedule.map((day, dayIndex) => (
+                <div key={dayIndex} className="border-b border-gray-200 pb-6 last:border-b-0 last:pb-0">
+                  <h3 className="text-xl font-semibold mb-4 text-black">{day.day}</h3>
+                  {day.assignments && day.assignments.length > 0 ? (
+                    <div className="space-y-3">
+                      {day.assignments.map((assignment, assignmentIndex) => (
+                        <div
+                          key={assignmentIndex}
+                          className="p-4 rounded-lg border-2 border-gray-200 hover:shadow-md transition-shadow bg-gray-50"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-bold text-lg text-black flex-1">{assignment.name}</h4>
+                            {assignment.priority && (
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getPriorityColor(assignment.priority)}`}>
+                                {assignment.priority.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4 text-gray-600">
+                            <span className="flex items-center">
+                              <span className="mr-2">🕐</span>
+                              {assignment.time}
+                            </span>
+                            {assignment.duration && (
+                              <span className="flex items-center">
+                                <span className="mr-2">⏱️</span>
+                                {assignment.duration}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50">
+                      <p className="text-gray-500 italic text-center">No assignments scheduled for this day</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : studyPlan ? (
           <div className="bg-white rounded-lg border-2 border-gray-800 p-8 shadow-lg">
             <div className="prose max-w-none">
-              {formatStudyPlan(studyPlan)}
+              <pre className="whitespace-pre-wrap text-black">{studyPlan}</pre>
             </div>
           </div>
         ) : (

@@ -56,6 +56,7 @@ export const AssignmentProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const handleNotificationToggle = (index: number) => {
+    // Just toggle the notification state - notifications will be sent when Generate Study Plan is clicked
     setAssignmentDataState((prev) =>
       prev.map((assignment, i) =>
         i === index ? { ...assignment, showNotification: !assignment.showNotification } : assignment

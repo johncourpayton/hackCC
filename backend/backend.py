@@ -4,7 +4,9 @@ from flask_apscheduler import APScheduler
 import requests
 import os
 import sys
-from datetime import datetime, timezone
+import json
+import re
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
@@ -90,8 +92,10 @@ def fetch_canvas_assignments():
         print("Canvas domain or API token missing!")
         return []
 
-    start_dt = datetime.fromisoformat(START_DATE)
-    end_dt = datetime.fromisoformat(END_DATE)
+    # Parse dates as date objects (not datetime) to compare dates only, ignoring time
+    start_date_obj = datetime.strptime(START_DATE, "%Y-%m-%d").date()
+    end_date_obj = datetime.strptime(END_DATE, "%Y-%m-%d").date()
+    
     courses = get_user_courses(canvas_domain, api_token)
 
     all_assignments = []
@@ -104,23 +108,60 @@ def fetch_canvas_assignments():
             continue
 
         api_url = f"https://{canvas_domain}/api/v1/courses/{course_id}/assignments"
-        params = {"per_page": 100, "bucket": "upcoming"}
+        # Remove bucket filter - fetch all assignments and filter by date range ourselves
+        # This ensures we get assignments in our specific date range regardless of Canvas's bucket logic
+        # Increase per_page to get more assignments (Canvas allows up to 100 per page)
+        params = {"per_page": 100}
 
         try:
             response = requests.get(api_url, headers=headers, params=params)
             response.raise_for_status()
             assignments = response.json()
+            
+            # Handle pagination using Canvas Link header
+            # Canvas API uses Link headers for pagination: <url>; rel="next"
+            while 'Link' in response.headers:
+                link_header = response.headers['Link']
+                # Parse Link header to find next page
+                next_url = None
+                for link in link_header.split(','):
+                    if 'rel="next"' in link:
+                        next_url = link.split(';')[0].strip('<> ')
+                        break
+                
+                if next_url:
+                    response = requests.get(next_url, headers=headers)
+                    response.raise_for_status()
+                    assignments.extend(response.json())
+                else:
+                    break
 
             for assignment in assignments:
                 due_at = assignment.get("due_at")
+                # Only include assignments with due dates in our date range
+                # Assignments without due dates are excluded
                 if due_at:
                     try:
+                        # Parse due date and extract just the date part for comparison
                         due_dt = datetime.fromisoformat(due_at.rstrip("Z"))
-                        if start_dt <= due_dt <= end_dt:
+                        # Convert to UTC if timezone-aware, then get date only
+                        if due_dt.tzinfo:
+                            due_dt_utc = due_dt.astimezone(timezone.utc)
+                            due_date_only = due_dt_utc.date()
+                        else:
+                            due_date_only = due_dt.date()
+                        
+                        # Compare dates only (ignoring time)
+                        if start_date_obj <= due_date_only <= end_date_obj:
                             assignment["course_name"] = course_name
                             all_assignments.append(assignment)
-                    except ValueError:
+                            print(f"  - Found assignment: {assignment.get('name', 'Unknown')} (Due: {due_date_only})")
+                    except ValueError as e:
+                        print(f"Error parsing due date for assignment {assignment.get('name', 'Unknown')}: {e}")
                         continue
+                else:
+                    # Log assignments without due dates for debugging
+                    print(f"  - Skipping assignment '{assignment.get('name', 'Unknown')}' (no due date)")
         except requests.exceptions.RequestException as err:
             print(f"Error fetching assignments for {course_name}: {err}")
 
@@ -140,9 +181,13 @@ def fetch_canvas_assignments():
 
         formatted_assignments.append({
             "name": a.get("name", "No Title"),
-            "due_date": formatted_due_date
+            "due_date": formatted_due_date,
+            "course_name": a.get("course_name", "Unknown Course"),
+            "description": a.get("description", ""),
+            "priority": "high" if "exam" in a.get("name", "").lower() or "test" in a.get("name", "").lower() else "medium"
         })
 
+    print(f"Found {len(formatted_assignments)} assignments in date range {START_DATE} to {END_DATE}")
     return formatted_assignments
 
 
@@ -271,26 +316,140 @@ def generate_study_plan():
             for a in assignments
         ])
         
-        # Create a prompt for Gemini
-        prompt = f"""Based on the following assignments, create a detailed and personalized study plan. 
-The study plan should include:
-1. A recommended schedule for completing each assignment
-2. Suggested time allocation based on priority levels
-3. Tips for managing the workload
-4. A day-by-day breakdown if applicable
+        # Use the same date range as Canvas assignments (START_DATE to END_DATE)
+        # Parse dates as naive dates (date-only, no time) to avoid timezone shifts
+        start_date_only = datetime.strptime(START_DATE, "%Y-%m-%d").date()
+        end_date_only = datetime.strptime(END_DATE, "%Y-%m-%d").date()
+        
+        # Generate all dates from START_DATE to END_DATE (inclusive)
+        week_dates = []
+        current_date = start_date_only
+        
+        while current_date <= end_date_only:
+            # Create datetime at noon local time to avoid timezone edge cases
+            current_datetime = datetime.combine(current_date, datetime.min.time())
+            local_timezone = ZoneInfo("America/Los_Angeles")
+            current_datetime_local = current_datetime.replace(tzinfo=local_timezone)
+            
+            week_dates.append({
+                "day_name": current_datetime_local.strftime('%A'),
+                "date": current_date.strftime('%Y-%m-%d'),
+                "full_date": current_datetime_local.strftime('%A, %B %d, %Y')
+            })
+            current_date += timedelta(days=1)
+        
+        # Create example JSON structure with actual dates
+        example_schedule = ",\n    ".join([
+            f'{{\n      "day": "{d["full_date"]}",\n      "date": "{d["date"]}",\n      "assignments": []\n    }}'
+            for d in week_dates
+        ])
+        
+        # Create a prompt for Gemini - requesting structured JSON format for date range
+        prompt = f"""Create a study schedule for the following assignments for the date range from {START_DATE} to {END_DATE} ({len(week_dates)} days: {week_dates[0]["full_date"]} through {week_dates[-1]["full_date"]}).
+You MUST return a JSON object with ALL {len(week_dates)} days in this date range - no exceptions.
+
+Return ONLY a JSON object with this exact structure - no additional text, explanations, or tips:
+
+{{
+  "schedule": [
+    {example_schedule}
+  ]
+}}
+
+For days with assignments, include them like this:
+{{
+  "day": "{week_dates[0]["full_date"]}",
+  "date": "{week_dates[0]["date"]}",
+  "assignments": [
+    {{
+      "name": "Assignment Name",
+      "time": "2:00 PM - 4:00 PM",
+      "duration": "2 hours",
+      "priority": "high"
+    }}
+  ]
+}}
+
+CRITICAL REQUIREMENTS:
+- You MUST include ALL {len(week_dates)} days from {START_DATE} to {END_DATE} in this exact order:
+{chr(10).join([f"- {d['day_name']}: {d['full_date']} ({d['date']})" for d in week_dates])}
+- Distribute assignments across the date range based on due dates and priority
+- High priority assignments should be scheduled earlier in the date range
+- Assignments due sooner should be scheduled earlier
+- Spread the workload evenly across the days when possible
+- Include ALL {len(week_dates)} days even if some days have no assignments (use empty assignments array: [])
+- Use realistic time blocks (1-4 hours per assignment)
+- Only include the date and time blocks - NO study tips, techniques, or advice
+- Format times in 12-hour format (e.g., "2:00 PM - 4:00 PM")
+- Use dates in format "YYYY-MM-DD" exactly as shown above
+- Use full day names with dates exactly as shown above
 
 Assignments:
 {assignments_text}
 
-Please provide a well-formatted, actionable study plan that helps the student effectively manage their time and complete all assignments on time."""
+Return ONLY valid JSON with ALL {len(week_dates)} days in the exact order shown above - no markdown, no code blocks, no explanations."""
         
         # Generate study plan using Gemini
-        study_plan = generate_text_with_gemini(prompt)
+        study_plan_response = generate_text_with_gemini(prompt)
         
-        return jsonify({
-            "status": "success",
-            "study_plan": study_plan
-        })
+        # Parse JSON from Gemini response (it might include markdown code blocks)
+        try:
+            # Try to extract JSON from markdown code blocks if present
+            json_match = re.search(r'\{[\s\S]*\}', study_plan_response)
+            if json_match:
+                study_plan_json = json.loads(json_match.group())
+            else:
+                # Try parsing the entire response as JSON
+                study_plan_json = json.loads(study_plan_response)
+            
+            # Validate structure
+            if "schedule" not in study_plan_json:
+                raise ValueError("Response missing 'schedule' key")
+            
+            # Ensure we have all days from START_DATE to END_DATE
+            schedule = study_plan_json.get("schedule", [])
+            original_count = len(schedule)
+            schedule_dates = {day.get("date"): day for day in schedule}
+            
+            # Build complete schedule with all days in the date range
+            complete_schedule = []
+            for expected_day in week_dates:
+                if expected_day["date"] in schedule_dates:
+                    # Use the day from Gemini response
+                    complete_schedule.append(schedule_dates[expected_day["date"]])
+                else:
+                    # Fill in missing day
+                    print(f"Warning: Missing day {expected_day['day_name']} ({expected_day['date']}), adding empty day")
+                    complete_schedule.append({
+                        "day": expected_day["full_date"],
+                        "date": expected_day["date"],
+                        "assignments": []
+                    })
+            
+            # Update the schedule in the response
+            study_plan_json["schedule"] = complete_schedule
+            
+            # Log if we had to fill in days
+            if original_count < len(week_dates):
+                print(f"Info: Received {original_count} days, filled to {len(week_dates)} days to match Canvas date range ({START_DATE} to {END_DATE}).")
+            
+            return jsonify({
+                "status": "success",
+                "study_plan": study_plan_json,
+                "raw_response": study_plan_response  # Include raw for debugging
+            })
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON from Gemini: {e}")
+            print(f"Raw response: {study_plan_response}")
+            # Fallback: return raw response if JSON parsing fails
+            return jsonify({
+                "status": "success",
+                "study_plan": {
+                    "schedule": [],
+                    "error": "Failed to parse schedule. Raw response provided.",
+                    "raw_response": study_plan_response
+                }
+            })
         
     except Exception as e:
         print(f"Error generating study plan: {e}")
@@ -299,6 +458,146 @@ Please provide a well-formatted, actionable study plan that helps the student ef
         return jsonify({
             "status": "error",
             "message": str(e)
+        }), 500
+
+
+@app.route("/api/notifications/assignments", methods=["POST"])
+def send_assignments_notifications():
+    """
+    Send Discord notifications for multiple assignments when Generate Study Plan is clicked.
+    Uses Discord user ID from settings and Discord bot token from .env.
+    """
+    try:
+        data = request.json
+        assignments = data.get("assignments", [])
+        
+        if not assignments or len(assignments) == 0:
+            return jsonify({
+                "status": "success",
+                "message": "No assignments to notify",
+                "notifications_sent": 0
+            })
+        
+        # Get Discord user ID from settings
+        discord_user_id = get_user_id_from_settings()
+        
+        if not discord_user_id:
+            return jsonify({
+                "status": "error",
+                "message": "Discord user ID not found. Please set it via 'My Info' in the app.",
+                "error_type": "ValueError"
+            }), 400
+        
+        # Check if Discord bot token is configured
+        discord_bot_token = os.getenv("DISCORD_BOT_TOKEN")
+        if not discord_bot_token:
+            return jsonify({
+                "status": "error",
+                "message": "Discord bot token not configured. Please add DISCORD_BOT_TOKEN to your .env file.",
+                "error_type": "ConfigurationError"
+            }), 500
+        
+        # Initialize bot
+        try:
+            bot = AssignmentReminderBot(user_id=discord_user_id)
+        except Exception as e:
+            print(f"[NOTIFICATION] ❌ Failed to initialize bot: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "status": "error",
+                "message": f"Failed to initialize Discord bot: {str(e)}",
+                "error_type": type(e).__name__
+            }), 500
+        
+        # Send notifications for all assignments
+        notifications_sent = 0
+        failed_notifications = []
+        error_details = []
+        
+        for assignment in assignments:
+            try:
+                assignment_name = assignment.get("name", "Unnamed Assignment")
+                due_date = assignment.get("due_date", "No due date")
+                description = assignment.get("description", "")
+                priority = assignment.get("priority", "none")
+                
+                # Create a formatted notification message
+                priority_emoji = {
+                    "low": "🟢",
+                    "medium": "🟡",
+                    "high": "🔴"
+                }.get(priority, "⚪")
+                
+                # Build notification message
+                message_content = f"🔔 **Assignment Notification**\n\n"
+                message_content += f"**{assignment_name}**\n\n"
+                message_content += f"📅 **Due Date:** {due_date}\n"
+                message_content += f"{priority_emoji} **Priority:** {priority.upper() if priority != 'none' else 'Not Set'}\n"
+                
+                if description:
+                    # Clean and truncate description if needed
+                    clean_description = description[:200] + "..." if len(description) > 200 else description
+                    message_content += f"\n📝 **Description:** {clean_description}\n"
+                
+                # Send notification via Discord bot
+                print(f"[NOTIFICATION] Attempting to send notification for '{assignment_name}' to user {discord_user_id}")
+                success = bot.bot.send_dm(user_id=discord_user_id, content=message_content)
+                
+                if success:
+                    notifications_sent += 1
+                    print(f"[NOTIFICATION] ✅ Successfully sent notification for '{assignment_name}'")
+                else:
+                    error_msg = "Failed to send DM. Check bot configuration and permissions."
+                    print(f"[NOTIFICATION] ❌ {error_msg}")
+                    error_details.append(error_msg)
+                    failed_notifications.append(assignment_name)
+            except Exception as e:
+                error_msg = f"Exception: {str(e)}"
+                print(f"[NOTIFICATION] ❌ Error sending notification for assignment {assignment.get('name', 'Unknown')}: {e}")
+                import traceback
+                traceback.print_exc()
+                error_details.append(error_msg)
+                failed_notifications.append(assignment.get("name", "Unknown"))
+        
+        # Return result
+        if notifications_sent > 0:
+            return jsonify({
+                "status": "success",
+                "message": f"Sent {notifications_sent} notification(s) to Discord",
+                "notifications_sent": notifications_sent,
+                "failed_notifications": failed_notifications if failed_notifications else None
+            })
+        else:
+            # Provide more detailed error message
+            error_message = "Failed to send any notifications. "
+            if error_details:
+                error_message += error_details[0] if len(error_details) > 0 else "Check your bot configuration."
+            else:
+                error_message += "Please check: 1) Bot is in a server with you, 2) DMs are enabled, 3) Bot token is valid"
+            
+            return jsonify({
+                "status": "error",
+                "message": error_message,
+                "notifications_sent": 0,
+                "failed_notifications": failed_notifications,
+                "error_details": error_details[0] if error_details else "Unknown error"
+            }), 500
+        
+    except ValueError as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "error_type": "ValueError"
+        }), 400
+    except Exception as e:
+        print(f"Error sending assignment notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "error_type": type(e).__name__
         }), 500
 
 
