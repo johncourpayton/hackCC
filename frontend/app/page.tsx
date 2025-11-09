@@ -31,7 +31,6 @@ export default function Home() {
   const [canvasUrl, setCanvasUrl] = useState('');
   const [discordIdNumber, setDiscordIdNumber] = useState('');
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
-  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [isSavingUserInfo, setIsSavingUserInfo] = useState(false);
 
   const handleHowToButton = () => {
@@ -138,10 +137,6 @@ export default function Home() {
 
   const handleUserInfoPopup = () => {
     setShowUserInfo(!showUserInfo);
-    // Reset success message when opening/closing modal
-    if (showUserInfo) {
-      setShowSaveSuccess(false);
-    }
   } 
 
   const saveUserInformation = async () => {
@@ -153,6 +148,7 @@ export default function Home() {
     if (!canvasApiKey.trim() || !trimmedUrl) return;
 
     setIsSavingUserInfo(true);
+
     console.log("url: " + trimmedUrl)
     console.log("apiKey: " + canvasApiKey)
     console.log("discord_id: " + discordIdNumber)
@@ -174,19 +170,13 @@ export default function Home() {
         throw new Error('Failed to save settings');
       }
 
-      setIsSavingUserInfo(false);
-      // Show success message
-      setShowSaveSuccess(true);
-      
-      // Auto-close the modal after 2 seconds
-      setTimeout(() => {
-        setShowSaveSuccess(false);
-        handleUserInfoPopup();
-      }, 2000);
+      // Close the modal after successful save
+      handleUserInfoPopup();
     } catch (error) {
       console.error('Error saving settings:', error);
-      setIsSavingUserInfo(false);
       alert('Failed to save settings. Please try again.');
+    } finally {
+      setIsSavingUserInfo(false);
     }
   };
     
@@ -328,88 +318,70 @@ export default function Home() {
               </button>
             </div>
             <div className="text-black">
-              {showSaveSuccess ? (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <div className="mb-4">
-                    <svg className="w-16 h-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  Discord Id Number
+                </label>
+                <input
+                  type="text"
+                  value={discordIdNumber}
+                  onChange={(e) => setDiscordIdNumber(e.target.value)}
+                  placeholder="Enter your Discord ID #"
+                  required
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded text-black focus:outline-none focus:border-blue-400"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  Canvas API Key
+                </label>
+                <input
+                  type="text"
+                  value={canvasApiKey}
+                  onChange={(e) => setCanvasApiKey(e.target.value)}
+                  placeholder="Enter your Canvas API key"
+                  required
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded text-black focus:outline-none focus:border-blue-400"
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  School Canvas URL
+                </label>
+                <input
+                  type="url"
+                  value={canvasUrl}
+                  onChange={(e) => setCanvasUrl(e.target.value)}
+                  placeholder="e.g., https://yourschool.instructure.com"
+                  required
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded text-black focus:outline-none focus:border-blue-400"
+                />
+              </div>
+
+              <button
+                onClick={saveUserInformation}
+                disabled={isSavingUserInfo || !canvasApiKey.trim() || !canvasUrl.trim()}
+                className={`w-full px-4 py-2 rounded border-2 border-gray-800 font-medium text-black ${
+                  isSavingUserInfo || !canvasApiKey.trim() || !canvasUrl.trim()
+                    ? 'bg-gray-300 cursor-not-allowed opacity-50' 
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                {isSavingUserInfo ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                  </div>
-                  <h3 className="text-xl font-bold text-green-600 mb-2">Success!</h3>
-                  <p className="text-center text-gray-700">
-                    Your information has been saved successfully.
-                  </p>
-                  <p className="text-center text-sm text-gray-500 mt-2">
-                    This window will close automatically...
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">
-                      Discord Id Number
-                    </label>
-                    <input
-                      type="text"
-                      value={discordIdNumber}
-                      onChange={(e) => setDiscordIdNumber(e.target.value)}
-                      placeholder="Enter your Discord ID #"
-                      required
-                      className="w-full px-3 py-2 border-2 border-gray-300 rounded text-black focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">
-                      Canvas API Key
-                    </label>
-                    <input
-                      type="text"
-                      value={canvasApiKey}
-                      onChange={(e) => setCanvasApiKey(e.target.value)}
-                      placeholder="Enter your Canvas API key"
-                      required
-                      className="w-full px-3 py-2 border-2 border-gray-300 rounded text-black focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-                  
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">
-                      School Canvas URL
-                    </label>
-                    <input
-                      type="url"
-                      value={canvasUrl}
-                      onChange={(e) => setCanvasUrl(e.target.value)}
-                      placeholder="e.g., https://yourschool.instructure.com"
-                      required
-                      className="w-full px-3 py-2 border-2 border-gray-300 rounded text-black focus:outline-none focus:border-blue-400"
-                    />
-                  </div>
-
-                  <button
-                    onClick={saveUserInformation}
-                    className={`w-full px-4 py-2 rounded border-2 border-gray-800 font-medium text-black ${
-                      isSavingUserInfo || !canvasApiKey.trim() || !canvasUrl.trim()
-                        ? 'bg-gray-300 cursor-not-allowed opacity-50' 
-                        : 'hover:bg-gray-100'
-                    }`}
-                    disabled={isSavingUserInfo || !canvasApiKey.trim() || !canvasUrl.trim()}
-                  >
-                    {isSavingUserInfo ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Saving...
-                      </span>
-                    ) : (
-                      'Save'
-                    )}
-                  </button>
-                </>
-              )}
+                    Saving...
+                  </span>
+                ) : (
+                  'Save'
+                )}
+              </button>
             </div>
           </div>
         </div>          
@@ -417,3 +389,4 @@ export default function Home() {
     </div>
   );
 }
+

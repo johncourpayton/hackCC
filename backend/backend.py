@@ -155,13 +155,8 @@ def fetch_canvas_assignments():
                         if start_date_obj <= due_date_only <= end_date_obj:
                             assignment["course_name"] = course_name
                             all_assignments.append(assignment)
-                            print(f"  - Found assignment: {assignment.get('name', 'Unknown')} (Due: {due_date_only})")
-                    except ValueError as e:
-                        print(f"Error parsing due date for assignment {assignment.get('name', 'Unknown')}: {e}")
+                    except ValueError:
                         continue
-                else:
-                    # Log assignments without due dates for debugging
-                    print(f"  - Skipping assignment '{assignment.get('name', 'Unknown')}' (no due date)")
         except requests.exceptions.RequestException as err:
             print(f"Error fetching assignments for {course_name}: {err}")
 
@@ -187,7 +182,6 @@ def fetch_canvas_assignments():
             "priority": "high" if "exam" in a.get("name", "").lower() or "test" in a.get("name", "").lower() else "medium"
         })
 
-    print(f"Found {len(formatted_assignments)} assignments in date range {START_DATE} to {END_DATE}")
     return formatted_assignments
 
 
@@ -286,11 +280,10 @@ def get_assignments():
         try:
             # Trigger reminder check in background (non-blocking)
             # This will check assignments and send reminders if needed
-            print(f"[API] Triggering reminder check for user {discord_user_id} (from /api/assignments)")
             check_and_send_reminders(user_id=discord_user_id, include_test=False, debug=False)
         except Exception as e:
             # Don't fail the request if reminder check fails
-            print(f"[API] Warning: Reminder check failed: {e}")
+            print(f"Warning: Reminder check failed: {e}")
     
     return jsonify(assignments)
 
