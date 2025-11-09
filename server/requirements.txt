@@ -1,0 +1,6 @@
+flask
+flask-apscheduler
+requests
+python-dateutil
+python-dotenv
+
