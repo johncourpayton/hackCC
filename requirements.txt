@@ -1,2 +1,13 @@
-requests
 Flask
+flask-cors
+flask-apscheduler
+
+requests
+
+python-dateutil
+
+python-dotenv
+
+schedule
+
+google-generativeai

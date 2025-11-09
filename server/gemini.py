@@ -20,6 +20,7 @@ def generate_text_with_gemini(prompt_text):
     except Exception as e:
         return f"An error occurred: {e}"
 
+
 if __name__ == "__main__":
     print("Gemini API Test File")
     print("--------------------")

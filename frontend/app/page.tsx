@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation"
 import AssignmentCard from "./components/AssignmentCard";
+import { useAssignments } from "./context/AssignmentContext";
 
 interface Assignment {
   id: number;
@@ -15,9 +16,16 @@ interface Assignment {
 
 export default function Home() {
   const router = useRouter();
+  const { 
+    assignmentData, 
+    setAssignmentData, 
+    handlePriorityChange, 
+    handleDescriptionChange, 
+    handleNotificationToggle, 
+    handleAddAssignment 
+  } = useAssignments();
   const [showInstructions, setShowInstructions] = useState(false);
   const [showUserInfo, setShowUserInfo] = useState(false);
-  const [assignmentData, setAssignmentData] = useState<Assignment[]>([]);
   const [canvasApiKey, setCanvasApiKey] = useState('');
   const [canvasUrl, setCanvasUrl] = useState('');
   const [discordIdNumber, setDiscordIdNumber] = useState('');
@@ -26,8 +34,40 @@ export default function Home() {
     setShowInstructions(!showInstructions);
   }
 
-  const handleLoadStudyPlanPage = () => {
-    router.push('/study-plan')
+  const handleLoadStudyPlanPage = async () => {
+    // Collect assignment data
+    const assignmentJson = assignmentData.map(assignment => ({
+      name: assignment.name,
+      description: assignment.description || '',
+      priority: assignment.priority || 'none',
+      due_date: assignment.due_date
+    }));
+
+    console.log('Study Plan Data:', JSON.stringify(assignmentJson, null, 2));
+
+    try {
+      // Send data to Python backend for Gemini processing
+      const response = await fetch('http://localhost:5000/generate-study-plan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ assignments: assignmentJson }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate study plan');
+      }
+
+      const result = await response.json();
+      console.log('Gemini Response:', result);
+
+      // Navigate to study plan page
+      router.push('/study-plan');
+    } catch (error) {
+      console.error('Error generating study plan:', error);
+      alert('Failed to generate study plan. Please try again.');
+    }
   }
 
   const handlePullInfo = async () => {
@@ -37,57 +77,15 @@ export default function Home() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data: Assignment[] = await response.json();
-      setAssignmentData(data.map((assignment, index) => ({
-        id: index + 1, // Assign a unique ID for frontend use
-        name: assignment.name,
-        due_date: assignment.due_date,
-        description: "", // Initialize description
-        priority: undefined, // Initialize priority
-        showNotification: false // Initialize showNotification
-      })));
+      setAssignmentData(data);
     } catch (error) {
       console.error("Failed to fetch assignments:", error);
     }
   };
 
-  const handlePriorityChange = (index: number, priority: 'low' | 'medium' | 'high') => {
-    setAssignmentData((prev: Assignment[]) => 
-      prev.map((assignment: Assignment, i: number) => 
-        i === index ? { ...assignment, priority } : assignment
-      )
-    );
-  };
-
-  const handleDescriptionChange = (index: number, description: string) => {
-    setAssignmentData((prev: Assignment[]) => 
-      prev.map((assignment: Assignment, i: number) => 
-        i === index ? { ...assignment, description } : assignment
-      )
-    );
-  };
-
-  const handleNotificationToggle = (index: number) => {
-    setAssignmentData((prev: Assignment[]) => 
-      prev.map((assignment: Assignment, i: number) => 
-        i === index ? { ...assignment, showNotification: !assignment.showNotification } : assignment
-      )
-    );
-  };
-
-  const handleAddAssignment = () => {
-    const newAssignment: Assignment = {
-      id: assignmentData.length > 0 ? Math.max(...assignmentData.map(a => a.id)) + 1 : 1,
-      name: `New Assignment ${assignmentData.length + 1}`, // Changed from title to name
-      due_date: new Date().toISOString().split('T')[0], // Changed from dueDate to due_date
-      description: "",
-      showNotification: false
-    };
-    setAssignmentData((prev: Assignment[]) => [...prev, newAssignment]);
-  };
-
   const handleUserInfoPopup = () => {
     setShowUserInfo(!showUserInfo);
-  }
+  } 
 
   const saveUserInformation = async () => {
     let trimmedUrl = canvasUrl.trim();
@@ -99,6 +97,7 @@ export default function Home() {
 
     console.log("url: " + trimmedUrl)
     console.log("apiKey: " + canvasApiKey)
+    console.log("discord_id: " + discordIdNumber)
 
     try {
       const response = await fetch('http://localhost:5000/api/settings', {
@@ -109,7 +108,7 @@ export default function Home() {
         body: JSON.stringify({
           apiKey: canvasApiKey.trim(),
           canvasDomain: trimmedUrl,
-          // discordId: discordIdNumber
+          discordId: discordIdNumber
         }),
       });
 
